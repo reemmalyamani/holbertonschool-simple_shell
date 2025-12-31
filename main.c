@@ -1,16 +1,13 @@
 #include "shell.h"
 
-/**
- * main - Entry point
- * @argc: argument count (unused)
- * @argv: argument vector (we use argv[0] for error messages)
- *
- * Return: 0 on success
- */
-int main(int argc, char **argv)
-{
-	(void)argc;
+/* define the global program name */
+char *g_progname = NULL;
 
-	shell_loop(argv[0]); /* argv[0] is the program name (ex: "./hsh") */
+int main(int ac, char **av)
+{
+	(void)ac;
+
+	g_progname = av[0];
+	shell_loop();
 	return (0);
 }

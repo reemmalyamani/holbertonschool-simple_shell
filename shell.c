@@ -1,52 +1,10 @@
 #include "shell.h"
-#include <string.h>
 
-/**
- * trim_command - removes spaces + the ending '\n' from getline()
- * @s: string to clean
- *
- * Return: pointer to first “real” character (inside same buffer)
- *
- * Human note: getline keeps the '\n', so "/bin/ls\n" would fail execve
- * unless we remove it.
- */
-static char *trim_command(char *s)
-{
-	size_t i;
-	size_t len;
-
-	if (s == NULL)
-		return (NULL);
-
-	/* remove trailing newline */
-	len = strlen(s);
-	if (len > 0 && s[len - 1] == '\n')
-		s[len - 1] = '\0';
-
-	/* skip leading spaces/tabs */
-	while (*s == ' ' || *s == '\t')
-		s++;
-
-	/* remove trailing spaces/tabs */
-	len = strlen(s);
-	if (len == 0)
-		return (s);
-
-	i = len - 1;
-	while ((s[i] == ' ' || s[i] == '\t') && i > 0)
-	{
-		s[i] = '\0';
-		i--;
-	}
-
-	return (s);
-}
-
-/**
- * print_prompt - prints "#cisfun$ " only if interactive
- *
- *  note: isatty() means "is the user typing directly?"
- * If input is coming from a pipe (echo "..." | ./hsh), we DONT show prompt.
+/*
+ * print_prompt
+ * This function just prints the prompt.
+ * We only show it when the user is typing directly (interactive mode).
+ * If input is coming from a pipe, we do NOT print the prompt.
  */
 void print_prompt(void)
 {
@@ -54,96 +12,123 @@ void print_prompt(void)
 		write(STDOUT_FILENO, "#cisfun$ ", 9);
 }
 
-/**
- * read_line - reads one line from stdin
- * @line: buffer pointer (getline allocates/expands it)
- * @len: size of buffer
- *
- * Return: bytes read, or -1 on EOF (Ctrl+D)
+/*
+ * read_line
+ * Uses getline to read a full line from standard input.
+ * getline handles memory allocation for us.
+ * It returns -1 when the user presses Ctrl+D (EOF).
  */
 ssize_t read_line(char **line, size_t *len)
 {
 	return (getline(line, len, stdin));
 }
 
-/**
- * execute_command - forks and runs the command using execve
- * @progname: argv[0] (used for correct error message)
- * @command: cleaned command (like "/bin/ls")
- * @line_no: command counter (needed by checker format)
+/*
+ * execute_command
+ * This function runs one command entered by the user.
  *
- * 
- * argv[0] = command, argv[1] = NULL
+ * Project rules reminder (why this looks simple):
+ * - No pipes, no redirections, no semicolons
+ * - No PATH search, so the command must be a full or relative path
+ * - We split by spaces only (basic arguments, no quotes handling)
  */
-void execute_command(char *progname, char *command, unsigned long line_no)
+void execute_command(char *line, int *line_count)
 {
 	pid_t pid;
-	char *argv_exec[2];
+	char *args[64];
+	int i = 0;
+	char *token;
 
-	argv_exec[0] = command;
-	argv_exec[1] = NULL;
+	/* Remove the newline added by getline */
+	token = strtok(line, "\n");
+	if (token == NULL)
+		return;
+
+	/* Split the command by spaces and tabs */
+	token = strtok(token, " \t");
+	while (token != NULL && i < 63)
+	{
+		args[i++] = token;
+		token = strtok(NULL, " \t");
+	}
+	args[i] = NULL;
+
+	/* If the user just pressed Enter, do nothing */
+	if (args[0] == NULL)
+		return;
+
+	(*line_count)++;
 
 	pid = fork();
 	if (pid == -1)
 	{
+		/* Fork failed (should not normally happen) */
 		perror("fork");
 		return;
 	}
 
 	if (pid == 0)
 	{
-		/* Child: replace this process with the new program */
-		if (execve(command, argv_exec, environ) == -1)
-		{
-			/* Exactly like sh-style "not found" */
-			fprintf(stderr, "%s: %lu: %s: not found\n", progname, line_no, command);
-			_exit(127);
-		}
+		/*
+		 * Child process:
+		 * execve replaces this process with the new program.
+		 * If execve succeeds, this code will never run again.
+		 */
+		execve(args[0], args, environ);
+
+		/*
+		 * If execve returns, it failed.
+		 * We print the error exactly like /bin/sh.
+		 */
+		dprintf(STDERR_FILENO, "%s: %d: %s: not found\n",
+			g_progname, *line_count, args[0]);
+
+		_exit(127);
 	}
 	else
 	{
-		/* Parent: wait for child to finish */
-		waitpid(pid, NULL, 0);
+		/*
+		 * Parent process:
+		 * Wait for the child to finish before showing the prompt again.
+		 */
+		wait(NULL);
 	}
 }
 
-/**
- * shell_loop - the main REPL loop
- * @progname: argv[0], for correct error printing
+/*
+ * shell_loop
+ * This is the main loop of the shell.
  *
- * note: loop = prompt -> read -> run -> repeat
+ * Flow:
+ * 1. Print prompt
+ * 2. Read user input
+ * 3. Execute the command
+ * 4. Repeat until Ctrl+D
+ *
+ * We keep the same buffer and free it once at the end
+ * to avoid memory errors.
  */
-void shell_loop(char *progname)
+void shell_loop(void)
 {
 	char *line = NULL;
 	size_t len = 0;
 	ssize_t read;
-	unsigned long line_no = 0;
+	int line_count = 0;
 
 	while (1)
 	{
-		char *cmd;
-
 		print_prompt();
 
 		read = read_line(&line, &len);
 		if (read == -1)
 		{
-			/* Ctrl+D: exit cleanly (and print newline if interactive) */
+			/* Ctrl + D (EOF) */
 			if (isatty(STDIN_FILENO))
 				write(STDOUT_FILENO, "\n", 1);
 			break;
 		}
 
-		line_no++;
-
-		cmd = trim_command(line);
-
-		/* If user only pressed Enter or typed spaces, just re-prompt */
-		if (cmd[0] == '\0')
-			continue;
-
-		execute_command(progname, cmd, line_no);
+		execute_command(line, &line_count);
 	}
 
 	free(line);
