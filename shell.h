@@ -5,16 +5,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <string.h>
 
-/* we need environ because execve expects the environment */
+/* the environment array that execve needs */
 extern char **environ;
 
-void shell_loop(char *prog_name);
-void print_prompt(void);
-ssize_t read_line(char **line, size_t *len);
+/* for task 2-3-4 */
+int shell_loop(char *prog_name);
+void execute_command(char **argv, char *prog_name, int line_num);
 char **split_line(char *line);
-void execute_command(char **args, char *prog_name, int line_count);
-void free_args(char **args);
+char *get_path_value(void);
+char *find_command(char *cmd);
 
 #endif /* SHELL_H */

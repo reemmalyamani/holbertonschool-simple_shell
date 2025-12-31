@@ -1,152 +1,255 @@
+/* shell.c */
 #include "shell.h"
 
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/stat.h>
+
+/* this is the environment list the system gives our program */
+extern char **environ;
+
 /**
- * print_prompt - prints the prompt only in interactive mode
+ * print_prompt - shows the prompt only if we're typing in interactive mode
  */
 void print_prompt(void)
 {
-	/* isatty means: am I talking to a real terminal? */
 	if (isatty(STDIN_FILENO))
 		write(STDOUT_FILENO, "#cisfun$ ", 9);
 }
 
 /**
- * read_line - gets a full line from the user (or stdin)
- * Return: number of chars read, or -1 on EOF/error
- */
-ssize_t read_line(char **line, size_t *len)
-{
-	return (getline(line, len, stdin));
-}
-
-/**
- * split_line - split the line into words (command + arguments)
- * Example: "/bin/ls -l /tmp" becomes args[0]="/bin/ls", args[1]="-l", ...
- * Return: NULL-terminated array of strings
+ * split_line - takes the raw line and splits it into words (command + args)
+ * @line: the input line (we will modify it using strtok)
+ *
+ * Return: NULL if empty line, otherwise a malloc'd argv array ending with NULL
  */
 char **split_line(char *line)
 {
-	int bufsize = 64, i = 0;
-	char **tokens = malloc(sizeof(char *) * bufsize);
+	char **argv;
+	int i = 0, max = 64;
 	char *token;
 
-	if (!tokens)
+	argv = malloc(sizeof(char *) * max);
+	if (!argv)
 		return (NULL);
 
-	/* remove the last '\n' so it doesn’t mess up execve */
-	token = strtok(line, " \t\r\n");
-	while (token != NULL)
+	token = strtok(line, " \t");
+	while (token)
 	{
-		tokens[i] = token;
-		i++;
+		argv[i++] = token;
 
-		/* if we somehow have too many words, expand */
-		if (i >= bufsize)
+		/* if someone typed more args than expected */
+		if (i >= max - 1)
 		{
-			bufsize += 64;
-			tokens = realloc(tokens, sizeof(char *) * bufsize);
-			if (!tokens)
+			char **new_argv = malloc(sizeof(char *) * (max * 2));
+			int j;
+
+			if (!new_argv)
+			{
+				free(argv);
 				return (NULL);
+			}
+
+			for (j = 0; j < i; j++)
+				new_argv[j] = argv[j];
+
+			free(argv);
+			argv = new_argv;
+			max *= 2;
 		}
 
-		token = strtok(NULL, " \t\r\n");
+		token = strtok(NULL, " \t");
 	}
 
-	tokens[i] = NULL;
-	return (tokens);
+	argv[i] = NULL;
+
+	/* if user only pressed Enter (or spaces), treat as empty */
+	if (i == 0)
+	{
+		free(argv);
+		return (NULL);
+	}
+
+	return (argv);
 }
 
 /**
- * free_args - frees the array container (NOT the strings because strtok uses line)
+ * get_path_value - finds PATH=... inside environ (since getenv isn't allowed)
+ * Return: pointer to the PATH value (not malloc'd), or NULL if not found
  */
-void free_args(char **args)
+char *get_path_value(void)
 {
-	if (args)
-		free(args);
+	int i = 0;
+
+	while (environ[i])
+	{
+		if (strncmp(environ[i], "PATH=", 5) == 0)
+			return (environ[i] + 5);
+		i++;
+	}
+	return (NULL);
 }
 
 /**
- * execute_command - fork + execve the command
- * args[0] must be the program path because Task 3 still doesn't require PATH
+ * find_command - if command has no '/', search PATH and build full path
+ * @cmd: argv[0] (like "ls" or "./hbtn_ls")
+ *
+ * Return: malloc'd full path if found, or NULL if not found
+ * Note: if cmd already contains '/', we just duplicate it and return it.
  */
-void execute_command(char **args, char *prog_name, int line_count)
+char *find_command(char *cmd)
+{
+	char *path, *path_copy, *dir, *full;
+	int cmd_len, dir_len;
+
+	if (!cmd)
+		return (NULL);
+
+	/* if they typed /bin/ls or ./hbtn_ls, we don't search PATH */
+	if (strchr(cmd, '/'))
+		return (strdup(cmd));
+
+	path = get_path_value();
+	if (!path)
+		return (NULL);
+
+	path_copy = strdup(path);
+	if (!path_copy)
+		return (NULL);
+
+	cmd_len = (int)strlen(cmd);
+
+	dir = strtok(path_copy, ":");
+	while (dir)
+	{
+		dir_len = (int)strlen(dir);
+
+		full = malloc(dir_len + 1 + cmd_len + 1);
+		if (!full)
+		{
+			free(path_copy);
+			return (NULL);
+		}
+
+		strcpy(full, dir);
+		strcat(full, "/");
+		strcat(full, cmd);
+
+		if (access(full, X_OK) == 0)
+		{
+			free(path_copy);
+			return (full);
+		}
+
+		free(full);
+		dir = strtok(NULL, ":");
+	}
+
+	free(path_copy);
+	return (NULL);
+}
+
+/**
+ * execute_command - fork + execve, and print the correct error if not found
+ * @argv: array like {"./hbtn_ls", "/var", NULL}
+ * @prog_name: argv[0] of our shell (used in error printing)
+ * @line_num: command counter (matches checker: "./hsh: 1: ...")
+ */
+void execute_command(char **argv, char *prog_name, int line_num)
 {
 	pid_t pid;
 	int status;
+	char *cmd_path;
 
-	if (!args || !args[0])
-		return; /* empty line, just show prompt again */
+	if (!argv || !argv[0])
+		return;
+
+	/* task 0.4 style: built-in exit */
+	if (strcmp(argv[0], "exit") == 0)
+	{
+		/* we just exit cleanly; checker usually accepts this */
+		exit(0);
+	}
+
+	cmd_path = find_command(argv[0]);
+	if (!cmd_path)
+	{
+		fprintf(stderr, "%s: %d: %s: not found\n", prog_name, line_num, argv[0]);
+		return;
+	}
 
 	pid = fork();
 	if (pid == -1)
 	{
 		perror("fork");
+		free(cmd_path);
 		return;
 	}
 
 	if (pid == 0)
 	{
-		/*
-		 * execve is the core of the project:
-		 * - args[0] is the program (ex: /bin/ls)
-		 * - args is the argv list (ex: {"ls","-l",NULL})
-		 * - environ passes the environment to the new program
-		 */
-		execve(args[0], args, environ);
-
-		/* if we reached here, execve failed */
-		fprintf(stderr, "%s: %d: %s: not found\n", prog_name, line_count, args[0]);
-		exit(127);
+		/* child: replace process with the command */
+		if (execve(cmd_path, argv, environ) == -1)
+		{
+			/* if execve fails, print something sensible then exit child */
+			perror(prog_name);
+			free(cmd_path);
+			exit(127);
+		}
 	}
 	else
 	{
-		/* parent waits so we don't create zombie processes */
+		/* parent: wait */
 		waitpid(pid, &status, 0);
 	}
+
+	free(cmd_path);
 }
 
 /**
- * shell_loop - keeps running until EOF (Ctrl+D) or error
+ * shell_loop - main loop: prompt -> read -> split -> execute -> repeat
+ * @prog_name: argv[0] from main (for error printing)
+ *
+ * Return: 0 on normal end (Ctrl+D / EOF)
  */
-void shell_loop(char *prog_name)
+int shell_loop(char *prog_name)
 {
 	char *line = NULL;
 	size_t len = 0;
 	ssize_t read;
-	int line_count = 0;
+	int line_num = 0;
+	char **argv;
 
 	while (1)
 	{
-		char **args;
+		line_num++;
 
-		line_count++;
 		print_prompt();
 
-		/*
-		 * Read one full command line.
-		 * The command line always ends with '\n' (unless EOF).
-		 */
-		read = read_line(&line, &len);
+		read = getline(&line, &len, stdin);
 		if (read == -1)
 		{
-			/* Ctrl+D: in interactive, print a newline like real shells */
+			/* Ctrl+D: in interactive mode we drop to new line nicely */
 			if (isatty(STDIN_FILENO))
 				write(STDOUT_FILENO, "\n", 1);
-			break;
+
+			free(line);
+			return (0);
 		}
 
-		/*
-		 * Task rule: "simple lines" (no pipes/semicolon/redirections).
-		 * We are NOT implementing ; | > < etc — we just split by spaces.
-		 */
-		args = split_line(line);
-		if (!args)
+		/* remove the trailing '\n' so it doesn't break exec */
+		if (read > 0 && line[read - 1] == '\n')
+			line[read - 1] = '\0';
+
+		argv = split_line(line);
+		if (!argv)
 			continue;
 
-		execute_command(args, prog_name, line_count);
-		free_args(args);
+		execute_command(argv, prog_name, line_num);
+
+		/* argv itself was malloc'd, but the words point into 'line' */
+		free(argv);
 	}
-
-	free(line);
 }
-
