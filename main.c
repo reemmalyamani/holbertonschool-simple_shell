@@ -1,45 +1,19 @@
 #include "shell.h"
 
-void print_prompt(void)
+/**
+ * main - Entry point of simple program
+ * @argc: argument count (not used for this project)
+ * @argv: argument vector (we keep it to match main prototype)
+ *
+ * Return: 0 on success
+ */
+int main(int argc, char **argv)
 {
-    if (isatty(STDIN_FILENO)) {
-        write(STDOUT_FILENO, "#cisfun$", 9);
-    }
-}
-ssize_t read_line(char **line, size_t *len)
-{
-    return getline(line, len, stdin);
-}
-void execute_command(char *command)
-{
-    char *args[] = {"/bin/sh", "-c", command, NULL};
-    pid_t pid = fork();
+	(void)argc;
+	(void)argv;
 
-    if (pid == 0) {
-        execv(args[0], args);
-        perror(" No such file or directory\n");
-        exit(EXIT_FAILURE);
-    } else if (pid < 0) {
-        perror(" No such file or directory\n");
-    } else {
-        wait(NULL);
-    }
-}
-void shell_loop(void)
-{
-while (1) {
-        char *line = NULL;
-        size_t len = 0;
-        ssize_t read;
+	/* Start the shell loop (prompt -> read -> execute -> repeat) */
+	shell_loop();
 
-        print_prompt();
-        read = read_line(&line, &len);
-        if (read == -1) 
-        {
-            free(line);
-            break;
-        }
-        execute_command(line);
-        free(line);
-    }
+	return (0);
 }
