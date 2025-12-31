@@ -1,0 +1,33 @@
+[33mcommit e5e4dadb400ed9649d4a098373fc91067b8ff366[m[33m ([m[1;36mHEAD -> [m[1;32mmaster[m[33m)[m
+Author: reemmalyamani <alyamanireem@gmail.com>
+Date:   Wed Dec 31 07:00:09 2025 +0000
+
+    editing shell header and file and main
+
+ .bash_history                                             |  14 [32m++[m
+ .bashrc                                                   | 100 [32m++++++++++++++[m
+ .cache/motd.legal-displayed                               |   0
+ ...54653d3535372fb243dff0d5ea56432167ba71b1cd19ce67d1cc3c | Bin [31m0[m -> [32m65907[m bytes
+ ...5093416a6abc33fb0ff1433322d374c320a79a2ce63946a0a9ddf3 | Bin [31m0[m -> [32m72204[m bytes
+ ...8b8fe8b4ce9ab8806e2bbe2b80ecca49a2c93c6f3b81b8a671ce4b | Bin [31m0[m -> [32m130962[m bytes
+ ...e07d3ac353e38d2c9e3a257cad36ee2a758fc88b4cd5f0d479a5a9 | Bin [31m0[m -> [32m16888[m bytes
+ ...d894eeb3dfe1c8aaee1daecdfb74bbb314293813a730238621f077 | Bin [31m0[m -> [32m134602[m bytes
+ ...24226e2da88df4abeee0d8ca6bce79b19ca2bcd5f94b543939c66c | Bin [31m0[m -> [32m8423[m bytes
+ ...0e104919449355aedb55b5b546bb9fd53f0e1a8ca1b082109464e9 | Bin [31m0[m -> [32m22629[m bytes
+ ...c61126daf80149d2a016f12a54eab5e3b5c1dbc77410ff1a97edc4 | Bin [31m0[m -> [32m26743[m bytes
+ ...1ffa6f8e36963c064fdb49d1d4db1728a57128f0526052bd0e44b7 | Bin [31m0[m -> [32m160609[m bytes
+ ...e787648d84c8d226676cca2db70c1c37818ee1a99dbaab3c704f37 | Bin [31m0[m -> [32m154788[m bytes
+ .gitconfig                                                |   3 [32m+[m
+ .openvscode-server/data/logs/20251231T063647/ptyhost.log  |   0
+ .../data/logs/20251231T063647/remoteagent.log             |   0
+ .openvscode-server/extensions/extensions.json             |   1 [32m+[m
+ .profile                                                  |   9 [32m++[m
+ main.c                                                    |  49 [32m++[m[31m-----[m
+ my_school/first_file                                      |   1 [32m+[m
+ not_here                                                  |   0
+ old_school                                                |   0
+ ready_to_be_removed                                       |   0
+ school                                                    |   1 [32m+[m
+ shell.c                                                   | 175 [32m++++++++++++++++++++++++[m[31m-[m
+ shell.h                                                   |  34 [32m++++[m[31m-[m
+ 26 files changed, 342 insertions(+), 45 deletions(-)

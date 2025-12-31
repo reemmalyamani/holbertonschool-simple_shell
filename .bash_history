@@ -12,3 +12,7 @@ git pull origin main --allow-unrelated-histories
 nano shell.h
 nano shell.c
 nano main.c
+git add .
+git commit -m "editing shell header and file and main"
+git push
+git status

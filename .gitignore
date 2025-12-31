@@ -1,0 +1,19 @@
+# editor / OS
+*~
+*.swp
+*.swo
+.DS_Store
+
+# VSCode / remote
+.vscode/
+.openvscode-server/
+
+# cache / temp
+.cache/
+*.tmp
+
+# never commit shell history / profiles
+.bash_history
+.bashrc
+.profile
+.gitconfig
