@@ -1,68 +1,85 @@
 #include "shell.h"
 
-/*
- * print_prompt
- * This function just prints the prompt.
- * We only show it when the user is typing directly (interactive mode).
- * If input is coming from a pipe, we do NOT print the prompt.
+/**
+ * print_prompt - prints the prompt only in interactive mode
  */
 void print_prompt(void)
 {
+	/* isatty means: am I talking to a real terminal? */
 	if (isatty(STDIN_FILENO))
 		write(STDOUT_FILENO, "#cisfun$ ", 9);
 }
 
-/*
- * read_line
- * Uses getline to read a full line from standard input.
- * getline handles memory allocation for us.
- * It returns -1 when the user presses Ctrl+D (EOF).
+/**
+ * read_line - gets a full line from the user (or stdin)
+ * Return: number of chars read, or -1 on EOF/error
  */
 ssize_t read_line(char **line, size_t *len)
 {
 	return (getline(line, len, stdin));
 }
 
-/*
- * execute_command
- * This function runs one command entered by the user.
- *
- * Project rules reminder (why this looks simple):
- * - No pipes, no redirections, no semicolons
- * - No PATH search, so the command must be a full or relative path
- * - We split by spaces only (basic arguments, no quotes handling)
+/**
+ * split_line - split the line into words (command + arguments)
+ * Example: "/bin/ls -l /tmp" becomes args[0]="/bin/ls", args[1]="-l", ...
+ * Return: NULL-terminated array of strings
  */
-void execute_command(char *line, int *line_count)
+char **split_line(char *line)
 {
-	pid_t pid;
-	char *args[64];
-	int i = 0;
+	int bufsize = 64, i = 0;
+	char **tokens = malloc(sizeof(char *) * bufsize);
 	char *token;
 
-	/* Remove the newline added by getline */
-	token = strtok(line, "\n");
-	if (token == NULL)
-		return;
+	if (!tokens)
+		return (NULL);
 
-	/* Split the command by spaces and tabs */
-	token = strtok(token, " \t");
-	while (token != NULL && i < 63)
+	/* remove the last '\n' so it doesn’t mess up execve */
+	token = strtok(line, " \t\r\n");
+	while (token != NULL)
 	{
-		args[i++] = token;
-		token = strtok(NULL, " \t");
+		tokens[i] = token;
+		i++;
+
+		/* if we somehow have too many words, expand */
+		if (i >= bufsize)
+		{
+			bufsize += 64;
+			tokens = realloc(tokens, sizeof(char *) * bufsize);
+			if (!tokens)
+				return (NULL);
+		}
+
+		token = strtok(NULL, " \t\r\n");
 	}
-	args[i] = NULL;
 
-	/* If the user just pressed Enter, do nothing */
-	if (args[0] == NULL)
-		return;
+	tokens[i] = NULL;
+	return (tokens);
+}
 
-	(*line_count)++;
+/**
+ * free_args - frees the array container (NOT the strings because strtok uses line)
+ */
+void free_args(char **args)
+{
+	if (args)
+		free(args);
+}
+
+/**
+ * execute_command - fork + execve the command
+ * args[0] must be the program path because Task 3 still doesn't require PATH
+ */
+void execute_command(char **args, char *prog_name, int line_count)
+{
+	pid_t pid;
+	int status;
+
+	if (!args || !args[0])
+		return; /* empty line, just show prompt again */
 
 	pid = fork();
 	if (pid == -1)
 	{
-		/* Fork failed (should not normally happen) */
 		perror("fork");
 		return;
 	}
@@ -70,45 +87,28 @@ void execute_command(char *line, int *line_count)
 	if (pid == 0)
 	{
 		/*
-		 * Child process:
-		 * execve replaces this process with the new program.
-		 * If execve succeeds, this code will never run again.
+		 * execve is the core of the project:
+		 * - args[0] is the program (ex: /bin/ls)
+		 * - args is the argv list (ex: {"ls","-l",NULL})
+		 * - environ passes the environment to the new program
 		 */
 		execve(args[0], args, environ);
 
-		/*
-		 * If execve returns, it failed.
-		 * We print the error exactly like /bin/sh.
-		 */
-		dprintf(STDERR_FILENO, "%s: %d: %s: not found\n",
-			g_progname, *line_count, args[0]);
-
-		_exit(127);
+		/* if we reached here, execve failed */
+		fprintf(stderr, "%s: %d: %s: not found\n", prog_name, line_count, args[0]);
+		exit(127);
 	}
 	else
 	{
-		/*
-		 * Parent process:
-		 * Wait for the child to finish before showing the prompt again.
-		 */
-		wait(NULL);
+		/* parent waits so we don't create zombie processes */
+		waitpid(pid, &status, 0);
 	}
 }
 
-/*
- * shell_loop
- * This is the main loop of the shell.
- *
- * Flow:
- * 1. Print prompt
- * 2. Read user input
- * 3. Execute the command
- * 4. Repeat until Ctrl+D
- *
- * We keep the same buffer and free it once at the end
- * to avoid memory errors.
+/**
+ * shell_loop - keeps running until EOF (Ctrl+D) or error
  */
-void shell_loop(void)
+void shell_loop(char *prog_name)
 {
 	char *line = NULL;
 	size_t len = 0;
@@ -117,19 +117,36 @@ void shell_loop(void)
 
 	while (1)
 	{
+		char **args;
+
+		line_count++;
 		print_prompt();
 
+		/*
+		 * Read one full command line.
+		 * The command line always ends with '\n' (unless EOF).
+		 */
 		read = read_line(&line, &len);
 		if (read == -1)
 		{
-			/* Ctrl + D (EOF) */
+			/* Ctrl+D: in interactive, print a newline like real shells */
 			if (isatty(STDIN_FILENO))
 				write(STDOUT_FILENO, "\n", 1);
 			break;
 		}
 
-		execute_command(line, &line_count);
+		/*
+		 * Task rule: "simple lines" (no pipes/semicolon/redirections).
+		 * We are NOT implementing ; | > < etc — we just split by spaces.
+		 */
+		args = split_line(line);
+		if (!args)
+			continue;
+
+		execute_command(args, prog_name, line_count);
+		free_args(args);
 	}
 
 	free(line);
 }
+

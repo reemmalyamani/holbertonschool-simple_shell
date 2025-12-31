@@ -4,20 +4,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-#include <sys/types.h>
 #include <sys/wait.h>
 #include <string.h>
 
-/* environ is needed because execve needs environment */
+/* we need environ because execve expects the environment */
 extern char **environ;
 
-/* We store argv[0] so errors print the correct program name */
-extern char *g_progname;
-
+void shell_loop(char *prog_name);
 void print_prompt(void);
 ssize_t read_line(char **line, size_t *len);
-void execute_command(char *line, int *line_count);
-void shell_loop(void);
+char **split_line(char *line);
+void execute_command(char **args, char *prog_name, int line_count);
+void free_args(char **args);
 
 #endif /* SHELL_H */
