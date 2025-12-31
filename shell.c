@@ -1,11 +1,52 @@
 #include "shell.h"
-#include <sys/wait.h>
-
-/* Declare environ so execve can use it */
-extern char **environ;
+#include <string.h>
 
 /**
- * print_prompt - Displays the shell prompt
+ * trim_command - removes spaces + the ending '\n' from getline()
+ * @s: string to clean
+ *
+ * Return: pointer to first “real” character (inside same buffer)
+ *
+ * Human note: getline keeps the '\n', so "/bin/ls\n" would fail execve
+ * unless we remove it.
+ */
+static char *trim_command(char *s)
+{
+	size_t i;
+	size_t len;
+
+	if (s == NULL)
+		return (NULL);
+
+	/* remove trailing newline */
+	len = strlen(s);
+	if (len > 0 && s[len - 1] == '\n')
+		s[len - 1] = '\0';
+
+	/* skip leading spaces/tabs */
+	while (*s == ' ' || *s == '\t')
+		s++;
+
+	/* remove trailing spaces/tabs */
+	len = strlen(s);
+	if (len == 0)
+		return (s);
+
+	i = len - 1;
+	while ((s[i] == ' ' || s[i] == '\t') && i > 0)
+	{
+		s[i] = '\0';
+		i--;
+	}
+
+	return (s);
+}
+
+/**
+ * print_prompt - prints "#cisfun$ " only if interactive
+ *
+ *  note: isatty() means "is the user typing directly?"
+ * If input is coming from a pipe (echo "..." | ./hsh), we DONT show prompt.
  */
 void print_prompt(void)
 {
@@ -14,7 +55,11 @@ void print_prompt(void)
 }
 
 /**
- * read_line - Reads input from the user
+ * read_line - reads one line from stdin
+ * @line: buffer pointer (getline allocates/expands it)
+ * @len: size of buffer
+ *
+ * Return: bytes read, or -1 on EOF (Ctrl+D)
  */
 ssize_t read_line(char **line, size_t *len)
 {
@@ -22,62 +67,83 @@ ssize_t read_line(char **line, size_t *len)
 }
 
 /**
- * execute_command - Executes a command entered by the user
- * @command: command to execute (must be a full path like /bin/ls)
+ * execute_command - forks and runs the command using execve
+ * @progname: argv[0] (used for correct error message)
+ * @command: cleaned command (like "/bin/ls")
+ * @line_no: command counter (needed by checker format)
+ *
+ * 
+ * argv[0] = command, argv[1] = NULL
  */
-void execute_command(char *command)
+void execute_command(char *progname, char *command, unsigned long line_no)
 {
 	pid_t pid;
-	char *args[2];
+	char *argv_exec[2];
 
-	/* Simple command: no arguments */
-	args[0] = command;
-	args[1] = NULL;
+	argv_exec[0] = command;
+	argv_exec[1] = NULL;
 
 	pid = fork();
+	if (pid == -1)
+	{
+		perror("fork");
+		return;
+	}
+
 	if (pid == 0)
 	{
-		/* Child process */
-		execve(command, args, environ);
-
-		/* execve only returns if it fails */
-		perror("hsh");
-		exit(EXIT_FAILURE);
-	}
-	else if (pid < 0)
-	{
-		/* Fork failed */
-		perror("hsh");
+		/* Child: replace this process with the new program */
+		if (execve(command, argv_exec, environ) == -1)
+		{
+			/* Exactly like sh-style "not found" */
+			fprintf(stderr, "%s: %lu: %s: not found\n", progname, line_no, command);
+			_exit(127);
+		}
 	}
 	else
 	{
-		/* Parent waits for child */
-		wait(NULL);
+		/* Parent: wait for child to finish */
+		waitpid(pid, NULL, 0);
 	}
 }
 
 /**
- * shell_loop - Main shell loop
+ * shell_loop - the main REPL loop
+ * @progname: argv[0], for correct error printing
+ *
+ * note: loop = prompt -> read -> run -> repeat
  */
-void shell_loop(void)
+void shell_loop(char *progname)
 {
 	char *line = NULL;
 	size_t len = 0;
 	ssize_t read;
+	unsigned long line_no = 0;
 
 	while (1)
 	{
+		char *cmd;
+
 		print_prompt();
 
 		read = read_line(&line, &len);
 		if (read == -1)
 		{
-			/* Ctrl + D */
-			free(line);
+			/* Ctrl+D: exit cleanly (and print newline if interactive) */
+			if (isatty(STDIN_FILENO))
+				write(STDOUT_FILENO, "\n", 1);
 			break;
 		}
 
-		execute_command(line);
+		line_no++;
+
+		cmd = trim_command(line);
+
+		/* If user only pressed Enter or typed spaces, just re-prompt */
+		if (cmd[0] == '\0')
+			continue;
+
+		execute_command(progname, cmd, line_no);
 	}
 
 	free(line);
