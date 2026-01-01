@@ -1,6 +1,6 @@
 /* shell.c */
 #include "shell.h"
-
+int last_status = 0;  
 
 /* this is the environment list the system gives our program */
 extern char **environ;
@@ -206,6 +206,14 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	{
 		/* parent: wait */
 		waitpid(pid, &status, 0);
+		if (WIFEXITED(status))
+		{
+			last_status = WEXITSTATUS(status);
+		}
+		else
+		{
+			last_status = 1
+		}
 	}
 
 	free(cmd_path);
@@ -225,6 +233,7 @@ int shell_loop(char *prog_name)
 	ssize_t read;
 	int line_num = 0;
 	char **argv;
+	
 
 	while (1)
 	{
@@ -260,5 +269,5 @@ int shell_loop(char *prog_name)
 		free(argv);
 	}
 	free(line);
-	return (0);
+	return last_status;
 }
