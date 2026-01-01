@@ -179,7 +179,7 @@ void execute_command(char **argv, char *prog_name, int line_num)
 		fprintf(stderr, "%s: %d: %s: not found\n", prog_name, line_num, argv[0]);
 		return;
 	}
-
+	signal(SIGINT, SIG_IGN);
 	pid = fork();
 	if (pid == -1)
 	{
@@ -190,6 +190,7 @@ void execute_command(char **argv, char *prog_name, int line_num)
 
 	if (pid == 0)
 	{
+		signal(SIGINT, SIG_DFL); 
 		/* child: replace process with the command */
 		if (execve(cmd_path, argv, environ) == -1)
 		{
