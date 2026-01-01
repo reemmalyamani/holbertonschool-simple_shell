@@ -1,6 +1,7 @@
 /* shell.c */
 #include "shell.h"
-int last_status = 0;  
+
+int last_status = 0;
 
 /* this is the environment list the system gives our program */
 extern char **environ;
@@ -106,14 +107,10 @@ char *find_command(char *cmd)
 	if (strchr(cmd, '/'))
 	{
 		if (access(cmd, X_OK) == 0)
-		{
-			return strdup(cmd);
-		}
-		else
-		{
-			return NULL;
-		}
+			return (strdup(cmd));
+		return (NULL);
 	}
+
 	path = get_path_value();
 	if (!path || path[0] == '\0')
 		return (NULL);
@@ -167,32 +164,35 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	char *cmd_path;
 
 	if (!argv || !argv[0])
-		return 0;
+		return (0);
 
-	/* task 0.4 style: built-in exit */
+	/* built-in exit */
 	if (strcmp(argv[0], "exit") == 0)
-	{
-		return 1;
-	}
+		return (1);
+
+	/* built-in env */
 	if (strcmp(argv[0], "env") == 0)
 	{
-    	int i = 0;
-    	while (environ[i])
-    	{
-    	    printf("%s\n", environ[i]);
-    	    i++;
+		int i = 0;
+
+		while (environ[i])
+		{
+			printf("%s\n", environ[i]);
+			i++;
 		}
-    	last_status = 0; 
-    	return 0;  
+		last_status = 0;
+		return (0);
 	}
 
+	/* IMPORTANT: fork must not be called if the command doesn't exist */
 	cmd_path = find_command(argv[0]);
 	if (!cmd_path)
 	{
 		fprintf(stderr, "%s: %d: %s: not found\n", prog_name, line_num, argv[0]);
-		last_status = 127; 
-		return 0;
+		last_status = 127;
+		return (0);
 	}
+
 	signal(SIGINT, SIG_IGN);
 	pid = fork();
 	if (pid == -1)
@@ -200,16 +200,15 @@ int execute_command(char **argv, char *prog_name, int line_num)
 		perror("fork");
 		free(cmd_path);
 		last_status = 1;
-		return 0;
+		return (0);
 	}
 
 	if (pid == 0)
 	{
-		signal(SIGINT, SIG_DFL); 
-		/* child: replace process with the command */
+		signal(SIGINT, SIG_DFL);
+
 		if (execve(cmd_path, argv, environ) == -1)
 		{
-			/* if execve fails, print something sensible then exit child */
 			perror(prog_name);
 			free(cmd_path);
 			_exit(127);
@@ -217,32 +216,31 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	}
 	else
 	{
-		/* parent: wait */
 		if (waitpid(pid, &status, 0) == -1)
-        {
-            perror("waitpid");
-            last_status = 1;
-        }
-        else
-        {
-            if (WIFEXITED(status))
-                last_status = WEXITSTATUS(status);
-            else if (WIFSIGNALED(status))
-                last_status = 128 + WTERMSIG(status);
-            else
-                last_status = 1;
-        }
+		{
+			perror("waitpid");
+			last_status = 1;
+		}
+		else
+		{
+			if (WIFEXITED(status))
+				last_status = WEXITSTATUS(status);
+			else if (WIFSIGNALED(status))
+				last_status = 128 + WTERMSIG(status);
+			else
+				last_status = 1;
+		}
 	}
 
 	free(cmd_path);
-	return 0;
+	return (0);
 }
 
 /**
  * shell_loop - main loop: prompt -> read -> split -> execute -> repeat
  * @prog_name: argv[0] from main (for error printing)
  *
- * Return: 0 on normal end (Ctrl+D / EOF)
+ * Return: last command status (important for non-interactive checker)
  */
 int shell_loop(char *prog_name)
 {
@@ -251,7 +249,6 @@ int shell_loop(char *prog_name)
 	ssize_t read;
 	int line_num = 0;
 	char **argv;
-	
 
 	while (1)
 	{
@@ -265,6 +262,10 @@ int shell_loop(char *prog_name)
 			if (isatty(STDIN_FILENO))
 				write(STDOUT_FILENO, "\n", 1);
 
+			/*
+			 * FIX: when stdin ends (non-interactive mode), we must exit using
+			 * the last command status (ex: "ls" not found => exit 127).
+			 */
 			break;
 		}
 
@@ -278,7 +279,6 @@ int shell_loop(char *prog_name)
 
 		if (execute_command(argv, prog_name, line_num) == 1)
 		{
-			/* exit command was issued */
 			free(argv);
 			free(line);
 			exit(last_status);
@@ -287,6 +287,7 @@ int shell_loop(char *prog_name)
 		/* argv itself was malloc'd, but the words point into 'line' */
 		free(argv);
 	}
+
 	free(line);
-	return last_status;
+	return (last_status);
 }
