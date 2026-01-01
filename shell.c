@@ -1,11 +1,6 @@
 /* shell.c */
 #include "shell.h"
 
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <string.h>
-#include <errno.h>
-#include <sys/stat.h>
 
 /* this is the environment list the system gives our program */
 extern char **environ;
@@ -177,9 +172,6 @@ void execute_command(char **argv, char *prog_name, int line_num)
 	/* task 0.4 style: built-in exit */
 	if (strcmp(argv[0], "exit") == 0)
 	{
-		/* we just exit cleanly; checker usually accepts this */
-		free(line)
-		free(argv);
 		exit(0);
 	}
 
