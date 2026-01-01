@@ -52,16 +52,9 @@ This project implements that pipeline using only low-level system calls—no
 
 ### The Shell Loop
 
-At its core, the shell runs a simple infinite loop:
-
-```c
-while (1) {
-    print_prompt();
-    read_line();
-    parse_line();
-    execute_command();
-}
-```
+At its core, the shell runs a simple infinite loop. Inside the loop, it prints
+a prompt in interactive mode, reads a line, parses it into arguments, and
+executes the command.
 
 This loop runs forever until you type `exit`. A shell never truly retires—it's
 always ready for the next command.
@@ -110,7 +103,7 @@ Parent (Shell)                              Child (New Process)
   resumes loop
 ```
 
-1. **Check builtins** (`exit`, `env`) — handled without forking
+1. **Check builtins** (`exit`, `env`) — handled without forking via a static helper
 2. **Fork** — creates a child process
 3. **Exec** — child replaces itself with the target program
 4. **Wait** — parent pauses until child finishes
@@ -233,16 +226,20 @@ $ cat commands.txt | ./hsh
 ```
 simple_shell/
 ├── shell.c          # Core implementation
-│   ├── shell_loop()      # Main loop
-│   ├── execute_command() # Fork/exec/wait
+│   ├── shell_loop()      # Main loop (prompt, read, parse, execute)
+│   ├── execute_command() # Fork/exec/wait + builtin handling
 │   ├── split_line()      # Tokenization
-│   ├── find_command()    # PATH search
-│   ├── get_path_value()  # Extract PATH
-│   └── print_prompt()    # Interactive prompt
-├── shell.h          # Header with prototypes
+│   └── find_command()    # PATH search + environ parsing
+├── shell.h          # Header with prototypes and extern environ
 ├── main.c           # Entry point
 └── AUTHORS          # Contributors
 ```
+
+The shell follows strict Betty style guidelines:
+- Maximum 5 functions per file
+- No extern declarations in .c files
+- Functions under 40 lines where possible
+- Static helper for builtin command handling
 
 ---
 

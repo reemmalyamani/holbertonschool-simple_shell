@@ -14,11 +14,10 @@
 /* the environment array that execve needs */
 extern char **environ;
 
-/* for task 2-3-4 */
+/* function prototypes */
 int shell_loop(char *prog_name);
 int execute_command(char **argv, char *prog_name, int line_num);
 char **split_line(char *line);
-char *get_path_value(void);
 char *find_command(char *cmd);
 
 #endif /* SHELL_H */

@@ -3,20 +3,34 @@
 
 int last_status = 0;
 
-/* this is the environment list the system gives our program */
-extern char **environ;
-
 /**
- * print_prompt - prints the shell prompt in interactive mode
+ * handle_builtin - processes built-in commands
+ * @argv: argument array to check
  *
- * Description: This function checks if stdin is connected to a terminal
- * using isatty(). If it is, it writes the prompt "#cisfun$ " to stdout.
- * This provides a visual indicator that the shell is ready for input.
+ * Description: Checks if the command is a built-in (exit or env) and
+ * executes it directly without forking.
+ *
+ * Return: 1 if exit was called, 0 if env was executed, -1 otherwise
  */
-void print_prompt(void)
+static int handle_builtin(char **argv)
 {
-	if (isatty(STDIN_FILENO))
-		write(STDOUT_FILENO, "#cisfun$ ", 9);
+	if (strcmp(argv[0], "exit") == 0)
+		return (1);
+
+	if (strcmp(argv[0], "env") == 0)
+	{
+		int i = 0;
+
+		while (environ[i])
+		{
+			printf("%s\n", environ[i]);
+			i++;
+		}
+		last_status = 0;
+		return (0);
+	}
+
+	return (-1);
 }
 
 /**
@@ -24,11 +38,9 @@ void print_prompt(void)
  * @line: pointer to the input line to tokenize
  *
  * Description: Uses strtok() to split the input string by spaces and tabs.
- * Allocates memory for the argument array, resizing as needed to accommodate
- * all arguments. Returns NULL for empty lines or allocation failures.
+ * Allocates memory for the argument array, resizing as needed.
  *
  * Return: NULL if line is empty, otherwise a dynamically allocated array
- *         of strings ending with a NULL pointer
  */
 char **split_line(char *line)
 {
@@ -46,7 +58,6 @@ char **split_line(char *line)
 	{
 		argv[i++] = token;
 
-		/* reallocate if we run out of space for arguments */
 		if (i >= max - 1)
 		{
 			char **new_argv;
@@ -72,7 +83,6 @@ char **split_line(char *line)
 
 	argv[i] = NULL;
 
-	/* free and return NULL if the input was empty or only whitespace */
 	if (i == 0)
 	{
 		free(argv);
@@ -83,37 +93,13 @@ char **split_line(char *line)
 }
 
 /**
- * get_path_value - retrieves the value of PATH from environment
- *
- * Description: Manually searches the environ array for an entry starting
- * with "PATH=". This is required because getenv() is not allowed.
- *
- * Return: pointer to the PATH value string (not newly allocated), or
- *         NULL if PATH is not found
- */
-char *get_path_value(void)
-{
-	int i = 0;
-
-	while (environ[i])
-	{
-		if (strncmp(environ[i], "PATH=", 5) == 0)
-			return (environ[i] + 5);
-		i++;
-	}
-	return (NULL);
-}
-
-/**
  * find_command - locates an executable command
  * @cmd: the command name or path to search for
  *
  * Description: If cmd contains a '/', verifies the exact path exists and
- * is executable. Otherwise, searches each directory in PATH for an
- * executable file matching cmd. Allocates memory for the full path.
+ * is executable. Otherwise, searches each directory in PATH.
  *
- * Return: newly allocated string containing the full path, or NULL if
- *         the command cannot be found
+ * Return: newly allocated string containing the full path, or NULL if not found
  */
 char *find_command(char *cmd)
 {
@@ -123,11 +109,11 @@ char *find_command(char *cmd)
 	char *full;
 	int cmd_len;
 	int dir_len;
+	int i;
 
 	if (!cmd)
 		return (NULL);
 
-	/* if the command contains a slash, use the path as-is */
 	if (strchr(cmd, '/'))
 	{
 		if (access(cmd, X_OK) == 0)
@@ -135,7 +121,17 @@ char *find_command(char *cmd)
 		return (NULL);
 	}
 
-	path = get_path_value();
+	/* search for PATH= in environ manually */
+	path = NULL;
+	for (i = 0; environ[i]; i++)
+	{
+		if (strncmp(environ[i], "PATH=", 5) == 0)
+		{
+			path = environ[i] + 5;
+			break;
+		}
+	}
+
 	if (!path || path[0] == '\0')
 		return (NULL);
 
@@ -178,14 +174,13 @@ char *find_command(char *cmd)
 /**
  * execute_command - executes a command by forking and running it
  * @argv: array of arguments for the command
- * @prog_name: name of the shell program (for error messages)
- * @line_num: line number of the command (for error messages)
+ * @prog_name: name of the shell program
+ * @line_num: line number of the command
  *
- * Description: Handles built-in commands (exit, env) directly.
- * For other commands, forks a child process to execute the program.
- * Sets last_status to indicate the outcome of the command.
+ * Description: Handles built-in commands directly. For other commands,
+ * forks a child process to execute the program.
  *
- * Return: 1 if exit was called (to signal shell_loop to exit), 0 otherwise
+ * Return: 1 if exit was called, 0 otherwise
  */
 int execute_command(char **argv, char *prog_name, int line_num)
 {
@@ -196,25 +191,10 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	if (!argv || !argv[0])
 		return (0);
 
-	/* handle the exit built-in */
-	if (strcmp(argv[0], "exit") == 0)
-		return (1);
+	status = handle_builtin(argv);
+	if (status != -1)
+		return (status);
 
-	/* handle the env built-in */
-	if (strcmp(argv[0], "env") == 0)
-	{
-		int i = 0;
-
-		while (environ[i])
-		{
-			printf("%s\n", environ[i]);
-			i++;
-		}
-		last_status = 0;
-		return (0);
-	}
-
-	/* locate the command before attempting to execute it */
 	cmd_path = find_command(argv[0]);
 	if (!cmd_path)
 	{
@@ -268,11 +248,10 @@ int execute_command(char **argv, char *prog_name, int line_num)
 
 /**
  * shell_loop - main shell loop that processes commands
- * @prog_name: name of the shell program (for error messages)
+ * @prog_name: name of the shell program
  *
  * Description: Continuously reads input, parses it, and executes commands
- * until end-of-file is encountered or the exit built-in is called.
- * Handles both interactive and non-interactive modes.
+ * until end-of-file is encountered or exit is called.
  *
  * Return: the exit status of the last executed command
  */
@@ -287,19 +266,18 @@ int shell_loop(char *prog_name)
 	while (1)
 	{
 		line_num++;
-		print_prompt();
+		if (isatty(STDIN_FILENO))
+			write(STDOUT_FILENO, "#cisfun$ ", 9);
 
 		read = getline(&line, &len, stdin);
 		if (read == -1)
 		{
-			/* print newline on Ctrl+D in interactive mode */
 			if (isatty(STDIN_FILENO))
 				write(STDOUT_FILENO, "\n", 1);
 
 			break;
 		}
 
-		/* remove trailing newline character */
 		if (read > 0 && line[read - 1] == '\n')
 			line[read - 1] = '\0';
 
@@ -314,11 +292,9 @@ int shell_loop(char *prog_name)
 			exit(last_status);
 		}
 
-		/* free the argv array (strings point into line, don't free them) */
 		free(argv);
 	}
 
-	/* return last_status for non-interactive mode exit */
 	free(line);
 	return (last_status);
 }

@@ -35,7 +35,7 @@ like that).
 .TP
 .B env
 Display the current environment variables, one per line, in the format
-"name=value". Because we can't use getenv(), we iterate through the
+"name=value". The shell iterates through the
 .B environ
 array manually. Consider it a tribute to manual memory management.
 
@@ -114,7 +114,7 @@ allowing proper integration with scripts and test harnesses.
 .TP
 .B PATH
 A colon-separated list of directories used to search for executables.
-The shell parses this manually by scanning the environ array, since
+The shell parses PATH manually by scanning the environ array, since
 getenv() is forbidden by the Holberton overlords. If PATH is not set,
 you can only run commands with absolute paths or relative paths
 containing '/'.
@@ -158,13 +158,20 @@ Tab completion (you're on your own, kid)
 
 .TP
 .B shell.c
-Main shell implementation containing loop, execution, parsing, and PATH logic.
+Main shell implementation containing the shell loop, command execution,
+parsing logic, PATH searching, and builtin command handling.
+Follows strict Betty style with a static helper function for builtins.
+
 .TP
 .B shell.h
-Header file with function prototypes and extern declarations.
+Header file with function prototypes and the extern declaration for
+.B environ.
+No extern declarations appear in the .c file itself.
+
 .TP
 .B main.c
-Entry point that kicks off the shell loop.
+Minimal entry point that kicks off the shell loop.
+
 .TP
 .B AUTHORS
 Credits to the brilliant minds who wrote this.
