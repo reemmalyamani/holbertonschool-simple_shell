@@ -182,8 +182,8 @@ int execute_command(char **argv, char *prog_name, int line_num)
     	    printf("%s\n", environ[i]);
     	    i++;
 		}
-    	last_status = 0;  // success
-    	return 0;  // don't fork, just return
+    	last_status = 0; 
+    	return 0;  
 	}
 
 	cmd_path = find_command(argv[0]);
