@@ -179,6 +179,7 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	if (!cmd_path)
 	{
 		fprintf(stderr, "%s: %d: %s: not found\n", prog_name, line_num, argv[0]);
+		last_status = 127; /
 		return 0;
 	}
 	signal(SIGINT, SIG_IGN);
