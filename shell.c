@@ -212,7 +212,7 @@ int execute_command(char **argv, char *prog_name, int line_num)
 		}
 		else
 		{
-			last_status = 1
+			last_status = 1;
 		}
 	}
 
