@@ -7,7 +7,11 @@ int last_status = 0;
 extern char **environ;
 
 /**
- * print_prompt - shows the prompt only if we're typing in interactive mode
+ * print_prompt - prints the shell prompt in interactive mode
+ *
+ * Description: This function checks if stdin is connected to a terminal
+ * using isatty(). If it is, it writes the prompt "#cisfun$ " to stdout.
+ * This provides a visual indicator that the shell is ready for input.
  */
 void print_prompt(void)
 {
@@ -16,15 +20,21 @@ void print_prompt(void)
 }
 
 /**
- * split_line - takes the raw line and splits it into words (command + args)
- * @line: the input line (we will modify it using strtok)
+ * split_line - tokenizes the input line into arguments
+ * @line: pointer to the input line to tokenize
  *
- * Return: NULL if empty line, otherwise a malloc'd argv array ending with NULL
+ * Description: Uses strtok() to split the input string by spaces and tabs.
+ * Allocates memory for the argument array, resizing as needed to accommodate
+ * all arguments. Returns NULL for empty lines or allocation failures.
+ *
+ * Return: NULL if line is empty, otherwise a dynamically allocated array
+ *         of strings ending with a NULL pointer
  */
 char **split_line(char *line)
 {
 	char **argv;
-	int i = 0, max = 64;
+	int i = 0;
+	int max = 64;
 	char *token;
 
 	argv = malloc(sizeof(char *) * max);
@@ -36,12 +46,13 @@ char **split_line(char *line)
 	{
 		argv[i++] = token;
 
-		/* if someone typed more args than expected */
+		/* reallocate if we run out of space for arguments */
 		if (i >= max - 1)
 		{
-			char **new_argv = malloc(sizeof(char *) * (max * 2));
+			char **new_argv;
 			int j;
 
+			new_argv = malloc(sizeof(char *) * (max * 2));
 			if (!new_argv)
 			{
 				free(argv);
@@ -61,7 +72,7 @@ char **split_line(char *line)
 
 	argv[i] = NULL;
 
-	/* if user only pressed Enter (or spaces), treat as empty */
+	/* free and return NULL if the input was empty or only whitespace */
 	if (i == 0)
 	{
 		free(argv);
@@ -72,8 +83,13 @@ char **split_line(char *line)
 }
 
 /**
- * get_path_value - finds PATH=... inside environ (since getenv isn't allowed)
- * Return: pointer to the PATH value (not malloc'd), or NULL if not found
+ * get_path_value - retrieves the value of PATH from environment
+ *
+ * Description: Manually searches the environ array for an entry starting
+ * with "PATH=". This is required because getenv() is not allowed.
+ *
+ * Return: pointer to the PATH value string (not newly allocated), or
+ *         NULL if PATH is not found
  */
 char *get_path_value(void)
 {
@@ -89,21 +105,29 @@ char *get_path_value(void)
 }
 
 /**
- * find_command - if command has no '/', search PATH and build full path
- * @cmd: argv[0] (like "ls" or "./hbtn_ls")
+ * find_command - locates an executable command
+ * @cmd: the command name or path to search for
  *
- * Return: malloc'd full path if found, or NULL if not found
- * Note: if cmd already contains '/', we just duplicate it and return it.
+ * Description: If cmd contains a '/', verifies the exact path exists and
+ * is executable. Otherwise, searches each directory in PATH for an
+ * executable file matching cmd. Allocates memory for the full path.
+ *
+ * Return: newly allocated string containing the full path, or NULL if
+ *         the command cannot be found
  */
 char *find_command(char *cmd)
 {
-	char *path, *path_copy, *dir, *full;
-	int cmd_len, dir_len;
+	char *path;
+	char *path_copy;
+	char *dir;
+	char *full;
+	int cmd_len;
+	int dir_len;
 
 	if (!cmd)
 		return (NULL);
 
-	/* if they typed /bin/ls or ./hbtn_ls, we don't search PATH */
+	/* if the command contains a slash, use the path as-is */
 	if (strchr(cmd, '/'))
 	{
 		if (access(cmd, X_OK) == 0)
@@ -152,10 +176,16 @@ char *find_command(char *cmd)
 }
 
 /**
- * execute_command - fork + execve, and print the correct error if not found
- * @argv: array like {"./hbtn_ls", "/var", NULL}
- * @prog_name: argv[0] of our shell (used in error printing)
- * @line_num: command counter (matches checker: "./hsh: 1: ...")
+ * execute_command - executes a command by forking and running it
+ * @argv: array of arguments for the command
+ * @prog_name: name of the shell program (for error messages)
+ * @line_num: line number of the command (for error messages)
+ *
+ * Description: Handles built-in commands (exit, env) directly.
+ * For other commands, forks a child process to execute the program.
+ * Sets last_status to indicate the outcome of the command.
+ *
+ * Return: 1 if exit was called (to signal shell_loop to exit), 0 otherwise
  */
 int execute_command(char **argv, char *prog_name, int line_num)
 {
@@ -166,11 +196,11 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	if (!argv || !argv[0])
 		return (0);
 
-	/* built-in exit */
+	/* handle the exit built-in */
 	if (strcmp(argv[0], "exit") == 0)
 		return (1);
 
-	/* built-in env */
+	/* handle the env built-in */
 	if (strcmp(argv[0], "env") == 0)
 	{
 		int i = 0;
@@ -184,11 +214,12 @@ int execute_command(char **argv, char *prog_name, int line_num)
 		return (0);
 	}
 
-	/* IMPORTANT: do NOT fork if the command doesn't exist */
+	/* locate the command before attempting to execute it */
 	cmd_path = find_command(argv[0]);
 	if (!cmd_path)
 	{
-		fprintf(stderr, "%s: %d: %s: not found\n", prog_name, line_num, argv[0]);
+		fprintf(stderr, "%s: %d: %s: not found\n",
+			prog_name, line_num, argv[0]);
 		last_status = 127;
 		return (0);
 	}
@@ -236,10 +267,14 @@ int execute_command(char **argv, char *prog_name, int line_num)
 }
 
 /**
- * shell_loop - main loop: prompt -> read -> split -> execute -> repeat
- * @prog_name: argv[0] from main (for error printing)
+ * shell_loop - main shell loop that processes commands
+ * @prog_name: name of the shell program (for error messages)
  *
- * Return: last command status (so main can exit with it in non-interactive mode)
+ * Description: Continuously reads input, parses it, and executes commands
+ * until end-of-file is encountered or the exit built-in is called.
+ * Handles both interactive and non-interactive modes.
+ *
+ * Return: the exit status of the last executed command
  */
 int shell_loop(char *prog_name)
 {
@@ -257,14 +292,14 @@ int shell_loop(char *prog_name)
 		read = getline(&line, &len, stdin);
 		if (read == -1)
 		{
-			/* Ctrl+D: in interactive mode we drop to new line nicely */
+			/* print newline on Ctrl+D in interactive mode */
 			if (isatty(STDIN_FILENO))
 				write(STDOUT_FILENO, "\n", 1);
 
 			break;
 		}
 
-		/* remove the trailing '\n' so it doesn't break exec */
+		/* remove trailing newline character */
 		if (read > 0 && line[read - 1] == '\n')
 			line[read - 1] = '\0';
 
@@ -279,15 +314,11 @@ int shell_loop(char *prog_name)
 			exit(last_status);
 		}
 
-		/* argv itself was malloc'd, but the words point into 'line' */
+		/* free the argv array (strings point into line, don't free them) */
 		free(argv);
 	}
 
-	/*
-	 * Fix for checker:
-	 * When stdin closes (piped input), we must return the last_status so
-	 * the program exits with 127 if the last command was "not found".
-	 */
+	/* return last_status for non-interactive mode exit */
 	free(line);
 	return (last_status);
 }
