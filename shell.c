@@ -45,8 +45,7 @@ static int handle_builtin(char **argv)
 char **split_line(char *line)
 {
 	char **argv;
-	int i = 0;
-	int max = 64;
+	int i = 0, max = 64;
 	char *token;
 
 	argv = malloc(sizeof(char *) * max);
@@ -98,13 +97,8 @@ char **split_line(char *line)
  */
 char *find_command(char *cmd)
 {
-	char *path;
-	char *path_copy;
-	char *dir;
-	char *full;
-	int cmd_len;
-	int dir_len;
-	int i;
+	char *path, *path_copy, *dir, *full;
+	int cmd_len, dir_len, i;
 
 	if (!cmd)
 		return (NULL);
@@ -135,14 +129,11 @@ char *find_command(char *cmd)
 
 		full = malloc(dir_len + 1 + cmd_len + 1);
 		if (!full)
-		{
 			free(path_copy);
 			return (NULL);
-		}
 		strcpy(full, dir);
 		strcat(full, "/");
 		strcat(full, cmd);
-
 		if (access(full, X_OK) == 0)
 		{
 			free(path_copy);
@@ -241,11 +232,10 @@ int execute_command(char **argv, char *prog_name, int line_num)
  */
 int shell_loop(char *prog_name)
 {
-	char *line = NULL;
+	char *line = NULL, **argv;
 	size_t len = 0;
 	ssize_t read;
 	int line_num = 0;
-	char **argv;
 
 	while (1)
 	{
