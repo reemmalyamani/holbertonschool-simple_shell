@@ -269,8 +269,8 @@ int shell_loop(char *prog_name)
 		{
 			/* exit command was issued */
 			free(argv);
-			free
-			exit(last_status)
+			free(line);
+			exit(last_status);
 		}
 
 		/* argv itself was malloc'd, but the words point into 'line' */
