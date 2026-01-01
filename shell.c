@@ -1,18 +1,17 @@
 /* shell.c */
 #include "shell.h"
 
-int last_status = 0;
-
 /**
- * handle_builtin - processes built-in commands
- * @argv: argument array to check
- *
- * Description: Checks if the command is a built-in (exit or env) and
- * executes it directly without forking.
- *
- * Return: 1 if exit was called, 0 if env was executed, -1 otherwise
- */
-static int handle_builtin(char **argv)
+* handle_builtin - processes built-in commands
+* @argv: argument array to check
+* @last_status: pointer to store the last command's exit status
+*
+* Description: Checks if the command is a built-in (exit or env) and
+* executes it directly without forking.
+*
+* Return: 1 if exit was called, 0 if env was executed, -1 otherwise
+*/
+static int handle_builtin(char **argv, int *last_status)
 {
 	if (strcmp(argv[0], "exit") == 0)
 		return (1);
@@ -26,7 +25,7 @@ static int handle_builtin(char **argv)
 			printf("%s\n", environ[i]);
 			i++;
 		}
-		last_status = 0;
+		*last_status = 0;
 		return (0);
 	}
 
@@ -34,14 +33,14 @@ static int handle_builtin(char **argv)
 }
 
 /**
- * split_line - tokenizes the input line into arguments
- * @line: pointer to the input line to tokenize
- *
- * Description: Uses strtok() to split the input string by spaces and tabs.
- * Allocates memory for the argument array, resizing as needed.
- *
- * Return: NULL if line is empty, otherwise a dynamically allocated array
- */
+* split_line - tokenizes the input line into arguments
+* @line: pointer to the input line to tokenize
+*
+* Description: Uses strtok() to split the input string by spaces and tabs.
+* Allocates memory for the argument array, resizing as needed.
+*
+* Return: NULL if line is empty, otherwise a dynamically allocated array
+*/
 char **split_line(char *line)
 {
 	char **argv;
@@ -59,6 +58,7 @@ char **split_line(char *line)
 		if (i >= max - 1)
 		{
 			char **new_argv;
+
 			int j;
 
 			new_argv = malloc(sizeof(char *) * (max * 2));
@@ -84,38 +84,46 @@ char **split_line(char *line)
 	}
 	return (argv);
 }
-
 /**
- * find_command - locates an executable command
- * @cmd: the command name or path to search for
- *
- * Description: If cmd contains a '/', verifies the exact path exists and
- * is executable. Otherwise, searches each directory in PATH.
- *
- * Return: newly allocated string containing the full path
- * or NULL if not found
- */
+* get_path_value - finds PATH=... inside environ (since getenv isn't allowed)
+* Return: pointer to the PATH value (not malloc'd), or NULL if not found
+*/
+char *get_path_value(void)
+{
+	int i = 0;
+
+	while (environ[i])
+	{
+		if (strncmp(environ[i], "PATH=", 5) == 0)
+			return (environ[i] + 5);
+		i++;
+	}
+	return (NULL);
+}
+/**
+* find_command - locates an executable command
+* @cmd: the command name or path to search for
+*
+* Description: If cmd contains a '/', verifies the exact path exists and
+* is executable. Otherwise, searches each directory in PATH.
+*
+* Return: newly allocated string containing the full path
+* or NULL if not found
+*/
 char *find_command(char *cmd)
 {
 	char *path, *path_copy, *dir, *full;
-	int cmd_len, dir_len, i;
+	int cmd_len, dir_len;
 
 	if (!cmd)
 		return (NULL);
-
 	if (strchr(cmd, '/'))
 	{
 		if (access(cmd, X_OK) == 0)
 			return (strdup(cmd));
 		return (NULL);
 	}
-	path = NULL;
-	for (i = 0; environ[i]; i++)
-	{
-		if (strncmp(environ[i], "PATH=", 5) == 0)
-			path = environ[i] + 5;
-			break;
-	}
+	path = get_path_value();
 	if (!path || path[0] == '\0')
 		return (NULL);
 	path_copy = strdup(path);
@@ -139,103 +147,30 @@ char *find_command(char *cmd)
 			free(path_copy);
 			return (full);
 		}
-
 		free(full);
 		dir = strtok(NULL, ":");
 	}
 	free(path_copy);
 	return (NULL);
 }
-
 /**
- * execute_command - executes a command by forking and running it
- * @argv: array of arguments for the command
- * @prog_name: name of the shell program
- * @line_num: line number of the command
- *
- * Description: Handles built-in commands directly. For other commands,
- * forks a child process to execute the program.
- *
- * Return: 1 if exit was called, 0 otherwise
- */
-int execute_command(char **argv, char *prog_name, int line_num)
-{
-	pid_t pid;
-	int status;
-	char *cmd_path;
-
-	if (!argv || !argv[0])
-		return (0);
-
-	status = handle_builtin(argv);
-	if (status != -1)
-		return (status);
-
-	cmd_path = find_command(argv[0]);
-	if (!cmd_path)
-	{
-		fprintf(stderr, "%s: %d: %s: not found\n",
-			prog_name, line_num, argv[0]);
-		last_status = 127;
-		return (0);
-	}
-
-	signal(SIGINT, SIG_IGN);
-	pid = fork();
-	if (pid == -1)
-	{
-		perror("fork");
-		free(cmd_path);
-		last_status = 1;
-		return (0);
-	}
-
-	if (pid == 0)
-	{
-		signal(SIGINT, SIG_DFL);
-		if (execve(cmd_path, argv, environ) == -1)
-		{
-			perror(prog_name);
-			free(cmd_path);
-			_exit(127);
-		}
-	}
-	else
-	{
-		if (waitpid(pid, &status, 0) == -1)
-		{
-			perror("waitpid");
-			last_status = 1;
-		}
-		else
-		{
-			if (WIFEXITED(status))
-				last_status = WEXITSTATUS(status);
-			else if (WIFSIGNALED(status))
-				last_status = 128 + WTERMSIG(status);
-			else
-				last_status = 1;
-		}
-	}
-	free(cmd_path);
-	return (0);
-}
-
-/**
- * shell_loop - main shell loop that processes commands
- * @prog_name: name of the shell program
- *
- * Description: Continuously reads input, parses it, and executes commands
- * until end-of-file is encountered or exit is called.
- *
- * Return: the exit status of the last executed command
- */
+* shell_loop - main shell loop that processes commands
+* @prog_name: name of the shell program
+*
+* Description: Continuously reads input, parses it, and executes commands
+* until end-of-file is encountered or exit is called.
+*
+* Return: the exit status of the last executed command
+*/
 int shell_loop(char *prog_name)
 {
 	char *line = NULL, **argv;
+
 	size_t len = 0;
 	ssize_t read;
 	int line_num = 0;
+
+	int last_status = 0;
 
 	while (1)
 	{
@@ -257,7 +192,7 @@ int shell_loop(char *prog_name)
 		argv = split_line(line);
 		if (!argv)
 			continue;
-		if (execute_command(argv, prog_name, line_num) == 1)
+		if (execute_command(argv, prog_name, line_num, &last_status) == 1)
 		{
 			free(argv);
 			free(line);
