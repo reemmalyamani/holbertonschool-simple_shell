@@ -167,19 +167,19 @@ void execute_command(char **argv, char *prog_name, int line_num)
 	char *cmd_path;
 
 	if (!argv || !argv[0])
-		return;
+		return 0;
 
 	/* task 0.4 style: built-in exit */
 	if (strcmp(argv[0], "exit") == 0)
 	{
-		exit(0);
+		return 1;
 	}
 
 	cmd_path = find_command(argv[0]);
 	if (!cmd_path)
 	{
 		fprintf(stderr, "%s: %d: %s: not found\n", prog_name, line_num, argv[0]);
-		return;
+		return 0;
 	}
 	signal(SIGINT, SIG_IGN);
 	pid = fork();
@@ -187,7 +187,7 @@ void execute_command(char **argv, char *prog_name, int line_num)
 	{
 		perror("fork");
 		free(cmd_path);
-		return;
+		return 0;
 	}
 
 	if (pid == 0)
@@ -248,7 +248,12 @@ int shell_loop(char *prog_name)
 		if (!argv)
 			continue;
 
-		execute_command(argv, prog_name, line_num);
+		if (execute_command(argv, prog_name, line_num) == 1)
+		{
+			/* exit command was issued */
+			free(argv);
+			break;
+		}
 
 		/* argv itself was malloc'd, but the words point into 'line' */
 		free(argv);
