@@ -160,7 +160,7 @@ char *find_command(char *cmd)
  * @prog_name: argv[0] of our shell (used in error printing)
  * @line_num: command counter (matches checker: "./hsh: 1: ...")
  */
-void execute_command(char **argv, char *prog_name, int line_num)
+int execute_command(char **argv, char *prog_name, int line_num)
 {
 	pid_t pid;
 	int status;
