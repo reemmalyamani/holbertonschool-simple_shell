@@ -209,6 +209,7 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	}
 
 	free(cmd_path);
+	return 0;
 }
 
 /**
