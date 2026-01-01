@@ -184,7 +184,7 @@ int execute_command(char **argv, char *prog_name, int line_num)
 		return (0);
 	}
 
-	/* IMPORTANT: fork must not be called if the command doesn't exist */
+	/* IMPORTANT: do NOT fork if the command doesn't exist */
 	cmd_path = find_command(argv[0]);
 	if (!cmd_path)
 	{
@@ -206,7 +206,6 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	if (pid == 0)
 	{
 		signal(SIGINT, SIG_DFL);
-
 		if (execve(cmd_path, argv, environ) == -1)
 		{
 			perror(prog_name);
@@ -240,7 +239,7 @@ int execute_command(char **argv, char *prog_name, int line_num)
  * shell_loop - main loop: prompt -> read -> split -> execute -> repeat
  * @prog_name: argv[0] from main (for error printing)
  *
- * Return: last command status (important for non-interactive checker)
+ * Return: last command status (so main can exit with it in non-interactive mode)
  */
 int shell_loop(char *prog_name)
 {
@@ -262,10 +261,6 @@ int shell_loop(char *prog_name)
 			if (isatty(STDIN_FILENO))
 				write(STDOUT_FILENO, "\n", 1);
 
-			/*
-			 * FIX: when stdin ends (non-interactive mode), we must exit using
-			 * the last command status (ex: "ls" not found => exit 127).
-			 */
 			break;
 		}
 
@@ -288,6 +283,11 @@ int shell_loop(char *prog_name)
 		free(argv);
 	}
 
+	/*
+	 * Fix for checker:
+	 * When stdin closes (piped input), we must return the last_status so
+	 * the program exits with 127 if the last command was "not found".
+	 */
 	free(line);
 	return (last_status);
 }

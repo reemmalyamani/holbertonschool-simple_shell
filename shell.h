@@ -1,8 +1,6 @@
 #ifndef SHELL_H
 #define SHELL_H
 
-#define _GNU_SOURCE
-
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <string.h>
