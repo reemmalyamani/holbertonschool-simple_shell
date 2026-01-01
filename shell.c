@@ -178,6 +178,7 @@ void execute_command(char **argv, char *prog_name, int line_num)
 	if (strcmp(argv[0], "exit") == 0)
 	{
 		/* we just exit cleanly; checker usually accepts this */
+		free(argv);
 		exit(0);
 	}
 
@@ -205,7 +206,7 @@ void execute_command(char **argv, char *prog_name, int line_num)
 			/* if execve fails, print something sensible then exit child */
 			perror(prog_name);
 			free(cmd_path);
-			exit(127);
+			_exit(127);
 		}
 	}
 	else
