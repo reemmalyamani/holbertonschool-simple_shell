@@ -178,6 +178,7 @@ void execute_command(char **argv, char *prog_name, int line_num)
 	if (strcmp(argv[0], "exit") == 0)
 	{
 		/* we just exit cleanly; checker usually accepts this */
+		free(line)
 		free(argv);
 		exit(0);
 	}
@@ -235,7 +236,6 @@ int shell_loop(char *prog_name)
 	while (1)
 	{
 		line_num++;
-
 		print_prompt();
 
 		read = getline(&line, &len, stdin);
@@ -245,8 +245,7 @@ int shell_loop(char *prog_name)
 			if (isatty(STDIN_FILENO))
 				write(STDOUT_FILENO, "\n", 1);
 
-			free(line);
-			return (0);
+			break;
 		}
 
 		/* remove the trailing '\n' so it doesn't break exec */
@@ -262,4 +261,6 @@ int shell_loop(char *prog_name)
 		/* argv itself was malloc'd, but the words point into 'line' */
 		free(argv);
 	}
+	free(line);
+	return (0);
 }
