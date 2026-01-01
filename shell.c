@@ -110,11 +110,13 @@ char *find_command(char *cmd)
 	/* if they typed /bin/ls or ./hbtn_ls, we don't search PATH */
 	if (strchr(cmd, '/'))
 		if (access(cmd, X_OK) == 0)
-            return strdup(cmd);  
-        else
-            return NULL; 
-	
-
+		{
+			return strdup(cmd);
+		}
+		else
+		{
+			return NULL;
+		}
 	path = get_path_value();
 	if (!path || path[0] == '\0')
 		return (NULL);
