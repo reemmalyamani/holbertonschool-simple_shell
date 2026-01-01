@@ -232,6 +232,7 @@ simple_shell/
 │   └── find_command()    # PATH search + environ parsing
 ├── shell.h          # Header with prototypes and extern environ
 ├── main.c           # Entry point
+├── Excute.c         # Command execution (fork, execve, wait)
 └── AUTHORS          # Contributors
 ```
 

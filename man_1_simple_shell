@@ -1,7 +1,7 @@
 .TH HSH 1 "December 2025" "Holberton School" "Simple Shell Manual"
 
 .SH NAME
-hsh \- a minimal UNIX command interpreter
+hsh \- a minimal UNIX command-line interpreter
 
 .SH SYNOPSIS
 .B hsh
@@ -9,35 +9,47 @@ hsh \- a minimal UNIX command interpreter
 
 .SH DESCRIPTION
 .B hsh
-is a minimal command-line interpreter (shell) written in C from scratch.
-It reads commands from standard input, parses them, and executes them in
-separate processes. Unlike your favorite fancy shell, this one has no
-aliases, no tab completion, no syntax highlighting, and exactly zero
-unnecessary features.
+is a minimal command-line interpreter written in C. It reads commands from
+standard input, parses them, and executes them in separate processes using
+the fork-exec-wait cycle.
 
 .PP
-The shell implements the classic fork-exec-wait cycle:
-fork a child process, exec the desired program, then wait for it to finish.
-It handles two built-in commands directly and delegates everything else
-to external programs found via PATH.
+The shell implements the following operations:
+.IP \(bu 2
+Read a complete line from standard input
+.IP \(bu 2
+Tokenize the input into arguments separated by spaces and tabs
+.IP \(bu 2
+Locate the requested executable in the filesystem
+.IP \(bu 2
+Fork a child process to execute the command
+.IP \(bu 2
+Replace the child process image with the target program
+.IP \(bu 2
+Wait for the child process to terminate and capture its exit status
+
+.PP
+Two built-in commands are handled directly within the shell process:
+.B exit
+and
+.BR env .
+All other commands are executed as external programs found via PATH.
 
 .SH BUILT-INS
-The shell recognizes the following commands as built-ins, meaning they run
-inside the shell process itself without forking:
 
 .TP
 .B exit
-Terminate the shell and return to the parent process. The exit status
-reflects the last command executed (see EXIT STATUS below). Takes no
-arguments (anything after "exit" is silently ignored, because we're nice
-like that).
+Terminate the shell and return to the parent process. The shell exits with
+the exit status of the last command that was executed. This built-in takes
+no arguments.
 
 .TP
 .B env
 Display the current environment variables, one per line, in the format
-"name=value". The shell iterates through the
+.IR name=value .
+The shell iterates through the
 .B environ
-array manually. Consider it a tribute to manual memory management.
+array directly to produce this output.
 
 .SH USAGE
 
@@ -55,8 +67,7 @@ $
 .RE
 
 .PP
-The prompt reads "#cisfun$ " because that's what Holberton students type
-before they know better. You'll see it only when running interactively.
+The prompt "#cisfun$ " is displayed only when running interactively.
 
 .SS Non-Interactive Mode
 Feed commands through a pipe or input redirection:
@@ -68,24 +79,20 @@ $ ./hsh < script.sh
 .RE
 
 .PP
-No prompt appears in non-interactive mode because that's how real UNIX
-tools behave (and also because printing a prompt to a pipe would break
-the checker).
+No prompt is displayed in non-interactive mode.
 
 .SS Command Execution
 The shell searches for commands in the following order:
 
 .RS
-1. If the command contains a '/' (e.g., /bin/ls, ./script.sh), use that path directly.
-2. Otherwise, search each directory in the PATH environment variable.
-3. Execute the first matching executable found.
-4. If nothing is found, complain loudly with "not found".
+1. If the command contains a '/' (e.g., /bin/ls, ./script.sh), use that path
+2. Otherwise, search each directory in the PATH environment variable
+3. Execute the first matching executable found
+4. If no executable is found, print an error message with exit status 127
 .RE
 
 .PP
 Arguments are separated by spaces and tabs. Empty lines are ignored.
-The shell uses strtok() for tokenization, which means it doesn't handle
-quoted strings or escape sequences. This is a feature, not a bug.
 
 .SH EXIT STATUS
 
@@ -93,66 +100,62 @@ The shell maintains a record of the last command's exit status:
 
 .TP
 .B 0
-The command completed successfully (or a built-in returned success).
+The command completed successfully.
 .TP
 .B 127
 The command was not found in any PATH directory.
 .TP
 .B 128 + n
-The command was terminated by signal number n (e.g., 139 for SIGSEGV,
-143 for SIGTERM).
+The command was terminated by signal number
+.IR n .
+For example, 139 indicates SIGSEGV and 143 indicates SIGTERM.
 .TP
 .B 1
-Various other errors (fork failed, waitpid failed, etc.).
+Various errors such as fork failure or waitpid failure.
 
 .PP
-In non-interactive mode, the shell exits with the last command's status,
-allowing proper integration with scripts and test harnesses.
+In non-interactive mode, the shell exits with the last command's status.
 
 .SH ENVIRONMENT
 
 .TP
 .B PATH
 A colon-separated list of directories used to search for executables.
-The shell parses PATH manually by scanning the environ array, since
-getenv() is forbidden by the Holberton overlords. If PATH is not set,
-you can only run commands with absolute paths or relative paths
-containing '/'.
+The shell parses PATH manually by scanning the
+.B environ
+array. If PATH is not set, only absolute paths or paths containing '/'
+may be used.
 
 .TP
 .B environ
-The global array of environment variables, accessed directly because
-that's how real systems programmers roll.
+The global array of environment variables, accessed directly by the shell.
 
 .SH SIGNALS
 
 .TP
 .B SIGINT (Ctrl+C)
-The shell ignores SIGINT in the parent process, so pressing Ctrl+C won't
-kill your shell session. The child process receives default SIGINT
-handling, so Ctrl+C will terminate the currently running command as
-expected.
+The shell ignores SIGINT in the parent process, so pressing Ctrl+C does not
+terminate the shell session. The child process receives default SIGINT
+handling, so Ctrl+C terminates the currently running command.
 
 .SH LIMITATIONS
 
-This is an educational implementation. It lacks:
+This implementation lacks the following features:
 
-.IP \(bu
-Command history and line editing (no readline here)
-.IP \(bu
+.IP \(bu 2
 Pipes (|) and redirection (>, <)
-.IP \(bu
+.IP \(bu 2
 Background jobs (&) and job control
-.IP \(bu
+.IP \(bu 2
 Wildcard expansion (*, ?)
-.IP \(bu
+.IP \(bu 2
 Environment variable expansion ($VAR)
-.IP \(bu
+.IP \(bu 2
 Quoted strings or escape sequences
-.IP \(bu
+.IP \(bu 2
+Command history and line editing
+.IP \(bu 2
 Aliases, functions, or shell variables
-.IP \(bu
-Tab completion (you're on your own, kid)
 
 .SH FILES
 
@@ -160,35 +163,29 @@ Tab completion (you're on your own, kid)
 .B shell.c
 Main shell implementation containing the shell loop, command execution,
 parsing logic, PATH searching, and builtin command handling.
-Follows strict Betty style with a static helper function for builtins.
 
 .TP
 .B shell.h
 Header file with function prototypes and the extern declaration for
-.B environ.
-No extern declarations appear in the .c file itself.
+.BR environ .
 
 .TP
 .B main.c
-Minimal entry point that kicks off the shell loop.
+Entry point that invokes the shell loop.
+
+.TP
+.B Excute.c
+Command execution functions including fork, execve, and waitpid handling.
 
 .TP
 .B AUTHORS
-Credits to the brilliant minds who wrote this.
+List of project contributors.
 
 .SH COMPILATION
-
-Compile with strict warnings to prove your code is flawless:
 
 .RS
 gcc -Wall -Werror -Wextra -pedantic -std=gnu89 *.c -o hsh
 .RE
-
-.SH BUGS
-
-Probably. The code was written by students who had never touched a
-system call before September. That said, the checker seems happy, so
-it can't be that bad.
 
 .SH AUTHORS
 
@@ -201,6 +198,6 @@ sh(1), bash(1), execve(2), fork(2), wait(2), environ(7)
 
 .SH HISTORY
 
-This shell was born from a simple prompt: "Build a shell." After weeks
-of debugging fork() failures and memory leaks, the authors emerged with
-a newfound appreciation for bash, and a healthy fear of strtok().
+This shell was developed as an educational project to demonstrate
+fundamental systems programming concepts including process management,
+system calls, memory management, and environment handling.
