@@ -52,7 +52,6 @@ char **split_line(char *line)
 	argv = malloc(sizeof(char *) * max);
 	if (!argv)
 		return (NULL);
-
 	token = strtok(line, " \t");
 	while (token)
 	{
@@ -69,7 +68,6 @@ char **split_line(char *line)
 				free(argv);
 				return (NULL);
 			}
-
 			for (j = 0; j < i; j++)
 				new_argv[j] = argv[j];
 
@@ -77,18 +75,14 @@ char **split_line(char *line)
 			argv = new_argv;
 			max *= 2;
 		}
-
 		token = strtok(NULL, " \t");
 	}
-
 	argv[i] = NULL;
-
 	if (i == 0)
 	{
 		free(argv);
 		return (NULL);
 	}
-
 	return (argv);
 }
 
@@ -99,7 +93,8 @@ char **split_line(char *line)
  * Description: If cmd contains a '/', verifies the exact path exists and
  * is executable. Otherwise, searches each directory in PATH.
  *
- * Return: newly allocated string containing the full path, or NULL if not found
+ * Return: newly allocated string containing the full path
+ * or NULL if not found
  */
 char *find_command(char *cmd)
 {
@@ -120,27 +115,19 @@ char *find_command(char *cmd)
 			return (strdup(cmd));
 		return (NULL);
 	}
-
-	/* search for PATH= in environ manually */
 	path = NULL;
 	for (i = 0; environ[i]; i++)
 	{
 		if (strncmp(environ[i], "PATH=", 5) == 0)
-		{
 			path = environ[i] + 5;
 			break;
-		}
 	}
-
 	if (!path || path[0] == '\0')
 		return (NULL);
-
 	path_copy = strdup(path);
 	if (!path_copy)
 		return (NULL);
-
 	cmd_len = (int)strlen(cmd);
-
 	dir = strtok(path_copy, ":");
 	while (dir)
 	{
@@ -152,7 +139,6 @@ char *find_command(char *cmd)
 			free(path_copy);
 			return (NULL);
 		}
-
 		strcpy(full, dir);
 		strcat(full, "/");
 		strcat(full, cmd);
@@ -166,7 +152,6 @@ char *find_command(char *cmd)
 		free(full);
 		dir = strtok(NULL, ":");
 	}
-
 	free(path_copy);
 	return (NULL);
 }
@@ -241,7 +226,6 @@ int execute_command(char **argv, char *prog_name, int line_num)
 				last_status = 1;
 		}
 	}
-
 	free(cmd_path);
 	return (0);
 }
@@ -277,24 +261,20 @@ int shell_loop(char *prog_name)
 
 			break;
 		}
-
 		if (read > 0 && line[read - 1] == '\n')
 			line[read - 1] = '\0';
 
 		argv = split_line(line);
 		if (!argv)
 			continue;
-
 		if (execute_command(argv, prog_name, line_num) == 1)
 		{
 			free(argv);
 			free(line);
 			exit(last_status);
 		}
-
 		free(argv);
 	}
-
 	free(line);
 	return (last_status);
 }
