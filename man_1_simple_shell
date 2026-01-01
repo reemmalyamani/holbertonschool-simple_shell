@@ -1,0 +1,199 @@
+.TH HSH 1 "December 2025" "Holberton School" "Simple Shell Manual"
+
+.SH NAME
+hsh \- a minimal UNIX command interpreter
+
+.SH SYNOPSIS
+.B hsh
+[command_file]
+
+.SH DESCRIPTION
+.B hsh
+is a minimal command-line interpreter (shell) written in C from scratch.
+It reads commands from standard input, parses them, and executes them in
+separate processes. Unlike your favorite fancy shell, this one has no
+aliases, no tab completion, no syntax highlighting, and exactly zero
+unnecessary features.
+
+.PP
+The shell implements the classic fork-exec-wait cycle:
+fork a child process, exec the desired program, then wait for it to finish.
+It handles two built-in commands directly and delegates everything else
+to external programs found via PATH.
+
+.SH BUILT-INS
+The shell recognizes the following commands as built-ins, meaning they run
+inside the shell process itself without forking:
+
+.TP
+.B exit
+Terminate the shell and return to the parent process. The exit status
+reflects the last command executed (see EXIT STATUS below). Takes no
+arguments (anything after "exit" is silently ignored, because we're nice
+like that).
+
+.TP
+.B env
+Display the current environment variables, one per line, in the format
+"name=value". Because we can't use getenv(), we iterate through the
+.B environ
+array manually. Consider it a tribute to manual memory management.
+
+.SH USAGE
+
+.SS Interactive Mode
+Run the shell without arguments and type commands at the prompt:
+
+.RS
+$ ./hsh
+#cisfun$ ls -la
+#cisfun$ pwd
+#cisfun$ echo Hello, World!
+#cisfun$ env
+#cisfun$ exit
+$
+.RE
+
+.PP
+The prompt reads "#cisfun$ " because that's what Holberton students type
+before they know better. You'll see it only when running interactively.
+
+.SS Non-Interactive Mode
+Feed commands through a pipe or input redirection:
+
+.RS
+$ echo "ls /tmp" | ./hsh
+$ cat commands.txt | ./hsh
+$ ./hsh < script.sh
+.RE
+
+.PP
+No prompt appears in non-interactive mode because that's how real UNIX
+tools behave (and also because printing a prompt to a pipe would break
+the checker).
+
+.SS Command Execution
+The shell searches for commands in the following order:
+
+.RS
+1. If the command contains a '/' (e.g., /bin/ls, ./script.sh), use that path directly.
+2. Otherwise, search each directory in the PATH environment variable.
+3. Execute the first matching executable found.
+4. If nothing is found, complain loudly with "not found".
+.RE
+
+.PP
+Arguments are separated by spaces and tabs. Empty lines are ignored.
+The shell uses strtok() for tokenization, which means it doesn't handle
+quoted strings or escape sequences. This is a feature, not a bug.
+
+.SH EXIT STATUS
+
+The shell maintains a record of the last command's exit status:
+
+.TP
+.B 0
+The command completed successfully (or a built-in returned success).
+.TP
+.B 127
+The command was not found in any PATH directory.
+.TP
+.B 128 + n
+The command was terminated by signal number n (e.g., 139 for SIGSEGV,
+143 for SIGTERM).
+.TP
+.B 1
+Various other errors (fork failed, waitpid failed, etc.).
+
+.PP
+In non-interactive mode, the shell exits with the last command's status,
+allowing proper integration with scripts and test harnesses.
+
+.SH ENVIRONMENT
+
+.TP
+.B PATH
+A colon-separated list of directories used to search for executables.
+The shell parses this manually by scanning the environ array, since
+getenv() is forbidden by the Holberton overlords. If PATH is not set,
+you can only run commands with absolute paths or relative paths
+containing '/'.
+
+.TP
+.B environ
+The global array of environment variables, accessed directly because
+that's how real systems programmers roll.
+
+.SH SIGNALS
+
+.TP
+.B SIGINT (Ctrl+C)
+The shell ignores SIGINT in the parent process, so pressing Ctrl+C won't
+kill your shell session. The child process receives default SIGINT
+handling, so Ctrl+C will terminate the currently running command as
+expected.
+
+.SH LIMITATIONS
+
+This is an educational implementation. It lacks:
+
+.IP \(bu
+Command history and line editing (no readline here)
+.IP \(bu
+Pipes (|) and redirection (>, <)
+.IP \(bu
+Background jobs (&) and job control
+.IP \(bu
+Wildcard expansion (*, ?)
+.IP \(bu
+Environment variable expansion ($VAR)
+.IP \(bu
+Quoted strings or escape sequences
+.IP \(bu
+Aliases, functions, or shell variables
+.IP \(bu
+Tab completion (you're on your own, kid)
+
+.SH FILES
+
+.TP
+.B shell.c
+Main shell implementation containing loop, execution, parsing, and PATH logic.
+.TP
+.B shell.h
+Header file with function prototypes and extern declarations.
+.TP
+.B main.c
+Entry point that kicks off the shell loop.
+.TP
+.B AUTHORS
+Credits to the brilliant minds who wrote this.
+
+.SH COMPILATION
+
+Compile with strict warnings to prove your code is flawless:
+
+.RS
+gcc -Wall -Werror -Wextra -pedantic -std=gnu89 *.c -o hsh
+.RE
+
+.SH BUGS
+
+Probably. The code was written by students who had never touched a
+system call before September. That said, the checker seems happy, so
+it can't be that bad.
+
+.SH AUTHORS
+
+Written by Reem Alyamani and Aljawharah Alammar as the final project
+of the first semester at Holberton School.
+
+.SH SEE ALSO
+
+sh(1), bash(1), execve(2), fork(2), wait(2), environ(7)
+
+.SH HISTORY
+
+This shell was born from a simple prompt: "Build a shell." After weeks
+of debugging fork() failures and memory leaks, the authors emerged with
+a newfound appreciation for bash, and a healthy fear of strtok().
