@@ -188,6 +188,7 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	{
 		perror("fork");
 		free(cmd_path);
+		last_status = 1;
 		return 0;
 	}
 
@@ -206,15 +207,20 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	else
 	{
 		/* parent: wait */
-		waitpid(pid, &status, 0);
-		if (WIFEXITED(status))
-		{
-			last_status = WEXITSTATUS(status);
-		}
-		else
-		{
-			last_status = 1;
-		}
+		if (waitpid(pid, &status, 0) == -1)
+        {
+            perror("waitpid");
+            last_status = 1;
+        }
+        else
+        {
+            if (WIFEXITED(status))
+                last_status = WEXITSTATUS(status);
+            else if (WIFSIGNALED(status))
+                last_status = 128 + WTERMSIG(status);
+            else
+                last_status = 1;
+        }
 	}
 
 	free(cmd_path);
