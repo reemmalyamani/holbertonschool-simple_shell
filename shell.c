@@ -174,6 +174,17 @@ int execute_command(char **argv, char *prog_name, int line_num)
 	{
 		return 1;
 	}
+	if (strcmp(argv[0], "env") == 0)
+	{
+    	int i = 0;
+    	while (environ[i])
+    	{
+    	    printf("%s\n", environ[i]);
+    	    i++;
+		}
+    	last_status = 0;  // success
+    	return 0;  // don't fork, just return
+	}
 
 	cmd_path = find_command(argv[0]);
 	if (!cmd_path)
